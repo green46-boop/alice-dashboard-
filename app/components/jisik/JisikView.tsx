@@ -28,6 +28,7 @@ export default function JisikView() {
   const [openFolder, setOpenFolder] = useState<{ key: string; label: string } | null>(null)
   const [newFolderName, setNewFolderName] = useState('')
   const [showNewInput, setShowNewInput] = useState(false)
+  const [creating, setCreating] = useState(false)
   const newInputRef = useRef<HTMLInputElement>(null)
   const supabase = createClient()
 
@@ -73,9 +74,12 @@ export default function JisikView() {
   }, [showNewInput])
 
   const createFolder = async () => {
+    if (creating) return
     const name = newFolderName.trim()
     if (!name) return
+    setCreating(true)
     const { error } = await supabase.from('folders').insert({ name })
+    setCreating(false)
     if (error) {
       alert(`폴더 생성 실패: ${error.message}`)
       return
@@ -86,7 +90,7 @@ export default function JisikView() {
   }
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter') { e.preventDefault(); createFolder() }
+    if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); createFolder() }
     if (e.key === 'Escape') { setShowNewInput(false); setNewFolderName('') }
   }
 
