@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import Sidebar, { type View } from './components/layout/Sidebar'
+import BottomNav from './components/layout/BottomNav'
 import SearchBar from './components/layout/SearchBar'
 import HomeView from './components/home/HomeView'
 import JigaebuView from './components/jigaebu/JigaebuView'
@@ -36,7 +37,7 @@ export default function Home() {
       {/* 사이드바 + 메인 */}
       <div className="flex flex-1 overflow-hidden">
         <Sidebar currentView={view} onNavigate={setView} />
-        <main className="flex-1 overflow-y-auto">
+        <main className="flex-1 overflow-y-auto pb-16 md:pb-0">
           {view === 'home' && <HomeView key={refreshKey} />}
           {view === 'jigaebu' && <JigaebuView key={refreshKey} />}
           {view === 'jisik' && <JisikView key={refreshKey} />}
@@ -44,6 +45,9 @@ export default function Home() {
           {view === 'sns' && <SnsView key={refreshKey} />}
         </main>
       </div>
+
+      {/* 모바일 하단 탭 바 */}
+      <BottomNav currentView={view} onNavigate={setView} />
 
       {/* 새 기록 추가 모달 */}
       {addModal && (

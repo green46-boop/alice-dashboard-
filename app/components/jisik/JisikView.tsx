@@ -86,7 +86,7 @@ export default function JisikView() {
   }
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter') createFolder()
+    if (e.key === 'Enter') { e.preventDefault(); createFolder() }
     if (e.key === 'Escape') { setShowNewInput(false); setNewFolderName('') }
   }
 
@@ -186,8 +186,8 @@ export default function JisikView() {
                 placeholder="폴더 이름..."
                 className="flex-1 text-sm text-gray-700 focus:outline-none"
               />
-              <button onClick={createFolder} className="text-xs text-blue-500 hover:text-blue-700 shrink-0">저장</button>
-              <button onClick={() => { setShowNewInput(false); setNewFolderName('') }} className="text-xs text-gray-400 hover:text-gray-600 shrink-0">취소</button>
+              <button type="button" onClick={createFolder} className="text-xs text-blue-500 hover:text-blue-700 shrink-0">저장</button>
+              <button type="button" onClick={() => { setShowNewInput(false); setNewFolderName('') }} className="text-xs text-gray-400 hover:text-gray-600 shrink-0">취소</button>
             </div>
           )}
         </div>

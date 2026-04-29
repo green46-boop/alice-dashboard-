@@ -17,7 +17,7 @@ interface Props {
 
 export default function Sidebar({ currentView, onNavigate }: Props) {
   return (
-    <aside className="w-52 shrink-0 bg-white border-r border-gray-100 flex flex-col">
+    <aside className="hidden md:flex w-52 shrink-0 bg-white border-r border-gray-100 flex-col">
       <div className="px-5 py-5">
         <h1 className="text-lg font-bold text-gray-900">Alice</h1>
       </div>
