@@ -159,7 +159,7 @@ export default function GeongangView() {
       .gte('created_at', thirtyAgo)
       .order('created_at', { ascending: false })
       .then(({ data }) => {
-        setEvents((data as HealthEvent[]) || [])
+        setEvents((data as unknown as HealthEvent[]) || [])
         setLoading(false)
       })
   }, [])
