@@ -18,9 +18,70 @@ const ACCENT: Record<string, string> = {
   green: '#4ade80', blue: '#60a5fa', purple: '#c084fc', pink: '#f472b6',
 }
 
+function safeTitle(event: FullEvent): string {
+  return event.summary || event.og_title || event.raw_text.slice(0, 50)
+}
+
+function generateMarkdown(event: FullEvent): string {
+  const url = isURL(event.raw_text) ? event.raw_text : null
+  const title = safeTitle(event)
+  const body = (url && event.raw_text === url) ? null
+    : (!event.raw_text.startsWith('http') ? event.raw_text : null)
+  const tags = event.tags ?? []
+  const today = new Date().toISOString().slice(0, 10)
+
+  const fm = [
+    '---',
+    `alice_id: "${event.id}"`,
+    `source: alice`,
+    `content_type: ${event.content_type || 'note'}`,
+    `created_at: ${event.created_at.slice(0, 10)}`,
+    `updated_at: ${today}`,
+    url ? `url: "${url}"` : null,
+    tags.length > 0 ? `tags: [${tags.join(', ')}]` : null,
+    '---',
+  ].filter(Boolean).join('\n')
+
+  const parts: string[] = [fm, '', `# ${title}`, '']
+
+  if (url) {
+    let domain = url
+    try { domain = new URL(url).hostname.replace('www.', '') } catch {}
+    parts.push('> [!info] 출처', `> [${domain}](${url})`, '')
+  }
+
+  if (body) {
+    parts.push('## 내용', '', body, '')
+  }
+
+  if (tags.length > 0) {
+    parts.push('---', '', tags.map(t => `#${t}`).join(' '))
+  }
+
+  return parts.join('\n')
+}
+
+function sendToObsidian(event: FullEvent) {
+  let vaultName = localStorage.getItem('obsidian_vault_name')
+  if (!vaultName) {
+    vaultName = prompt('Obsidian Vault 이름을 입력하세요:')
+    if (!vaultName) return
+    localStorage.setItem('obsidian_vault_name', vaultName)
+  }
+
+  const title = safeTitle(event)
+  const safe = title.replace(/[/\\:*?"<>|#%]/g, '_').replace(/\s+/g, '_').slice(0, 60)
+  const filePath = `Alice/knowledge/${event.id.slice(0, 8)}_${safe}`
+  const content = generateMarkdown(event)
+
+  const uri = `obsidian://new?vault=${encodeURIComponent(vaultName)}&file=${encodeURIComponent(filePath)}&content=${encodeURIComponent(content)}&paneType=tab`
+  window.open(uri, '_blank')
+}
+
 export default function EventViewModal({ event, onClose, onSaved, onDeleted }: Props) {
   const [editing, setEditing] = useState(false)
   const [isFavorite, setIsFavorite] = useState(event.is_favorite)
+  const [copied, setCopied] = useState(false)
   const supabase = createClient()
 
   const url = isURL(event.raw_text) ? event.raw_text : null
@@ -34,6 +95,22 @@ export default function EventViewModal({ event, onClose, onSaved, onDeleted }: P
     setIsFavorite(next)
     await supabase.from('events').update({ is_favorite: next }).eq('id', event.id)
   }
+
+  const copyUrl = async () => {
+    if (!url) return
+    await navigator.clipboard.writeText(url)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 1500)
+  }
+
+  // 표시용 단축 URL
+  const shortUrl = url ? (() => {
+    try {
+      const u = new URL(url)
+      const path = u.pathname + u.search
+      return u.hostname.replace('www.', '') + (path.length > 40 ? path.slice(0, 40) + '…' : path)
+    } catch { return url.slice(0, 60) }
+  })() : null
 
   if (editing) {
     return (
@@ -76,6 +153,13 @@ export default function EventViewModal({ event, onClose, onSaved, onDeleted }: P
                 ↗ 열기
               </a>
             )}
+            <button
+              onClick={() => sendToObsidian(event)}
+              className="text-xs px-3 py-1.5 bg-purple-50 text-purple-600 rounded-full font-medium hover:bg-purple-100 transition-colors"
+              title="Obsidian으로 보내기"
+            >
+              ⟁ Obsidian
+            </button>
             <button
               onClick={() => setEditing(true)}
               className="text-xs px-3 py-1.5 bg-gray-100 text-gray-600 rounded-full font-medium hover:bg-gray-200 transition-colors"
@@ -121,7 +205,7 @@ export default function EventViewModal({ event, onClose, onSaved, onDeleted }: P
               <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">{body}</p>
             )}
 
-            {/* URL만 있을 때 (제목/요약 없음) */}
+            {/* URL만 있을 때 */}
             {!title && !body && url && (
               <p className="text-sm text-gray-400 break-all">{url}</p>
             )}
@@ -151,6 +235,23 @@ export default function EventViewModal({ event, onClose, onSaved, onDeleted }: P
                 )}
                 <span className="text-xs text-gray-400 ml-auto">{formatKSTDate(event.created_at)}</span>
               </div>
+
+              {/* URL 출처 + 복사 */}
+              {url && shortUrl && (
+                <div className="flex items-center gap-2 pt-1">
+                  <span className="text-[11px] text-gray-400 truncate flex-1">{shortUrl}</span>
+                  <button
+                    onClick={copyUrl}
+                    className={`shrink-0 text-[11px] px-2 py-0.5 rounded-full border transition-all ${
+                      copied
+                        ? 'border-green-300 text-green-600 bg-green-50'
+                        : 'border-gray-200 text-gray-500 hover:border-gray-400'
+                    }`}
+                  >
+                    {copied ? '복사됨 ✓' : '복사'}
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         </div>

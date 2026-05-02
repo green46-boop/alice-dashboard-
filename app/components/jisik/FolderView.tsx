@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState, useRef } from 'react'
+import JSZip from 'jszip'
 import { createClient } from '@/lib/supabase'
 import { MODULE_COLORS } from '@/lib/constants'
 import { formatKSTDate, isURL } from '@/lib/utils'
@@ -44,6 +45,57 @@ const CONTENT_TYPE_FILTERS = [
   { value: 'expense', label: '💰 지출' },
 ]
 
+function normalizeTag(raw: string): string {
+  return raw.trim().replace(/^#/, '').toLowerCase()
+}
+
+function makeSafeFilename(event: Event): string {
+  const title = event.summary || event.og_title || event.id
+  const safe = title
+    .replace(/[/\\:*?"<>|#%]/g, '_')
+    .replace(/\s+/g, '_')
+    .slice(0, 60)
+  return `${event.id.slice(0, 8)}_${safe}.md`
+}
+
+function generateMarkdown(event: Event, today: string): string {
+  const url = isURL(event.raw_text) ? event.raw_text : null
+  const title = event.summary || event.og_title || event.raw_text.slice(0, 50)
+  const body = (url && event.raw_text === url) ? null
+    : (!event.raw_text.startsWith('http') ? event.raw_text : null)
+  const tags = event.tags ?? []
+
+  const fm = [
+    '---',
+    `alice_id: "${event.id}"`,
+    `source: alice`,
+    `content_type: ${event.content_type || 'note'}`,
+    `created_at: ${event.created_at.slice(0, 10)}`,
+    `updated_at: ${today}`,
+    url ? `url: "${url}"` : null,
+    tags.length > 0 ? `tags: [${tags.join(', ')}]` : null,
+    '---',
+  ].filter(Boolean).join('\n')
+
+  const parts: string[] = [fm, '', `# ${title}`, '']
+
+  if (url) {
+    let domain = url
+    try { domain = new URL(url).hostname.replace('www.', '') } catch {}
+    parts.push('> [!info] 출처', `> [${domain}](${url})`, '')
+  }
+
+  if (body) {
+    parts.push('## 내용', '', body, '')
+  }
+
+  if (tags.length > 0) {
+    parts.push('---', '', tags.map(t => `#${t}`).join(' '))
+  }
+
+  return parts.join('\n')
+}
+
 export default function FolderView({ folderKey, folderLabel, allFolders, onBack, onFolderRenamed }: Props) {
   const [events, setEvents] = useState<Event[]>([])
   const [assignmentMap, setAssignmentMap] = useState<Map<string, Set<string>>>(new Map())
@@ -56,6 +108,9 @@ export default function FolderView({ folderKey, folderLabel, allFolders, onBack,
   const [folderName, setFolderName] = useState(
     allFolders.find(f => f.id === folderKey)?.name ?? folderLabel
   )
+  const [tagInputOpen, setTagInputOpen] = useState<Record<string, boolean>>({})
+  const [tagInputValue, setTagInputValue] = useState<Record<string, string>>({})
+  const [exporting, setExporting] = useState(false)
   const renameInputRef = useRef<HTMLInputElement>(null)
   const supabase = createClient()
 
@@ -78,7 +133,6 @@ export default function FolderView({ folderKey, folderLabel, allFolders, onBack,
         .order('created_at', { ascending: false })
       loadedEvents = data || []
     } else if (isUnclassified) {
-      // knowledge 이벤트 중 어떤 폴더에도 속하지 않은 것
       const [knowledgeRes, assignedRes] = await Promise.all([
         supabase
           .from('events')
@@ -91,7 +145,6 @@ export default function FolderView({ folderKey, folderLabel, allFolders, onBack,
       const assignedSet = new Set((assignedRes.data || []).map(r => r.event_id))
       loadedEvents = (knowledgeRes.data || []).filter(e => !assignedSet.has(e.id))
     } else {
-      // 사용자 폴더: event_folders에서 이 폴더에 속한 이벤트 가져오기
       const { data: efData } = await supabase
         .from('event_folders')
         .select('event_id')
@@ -110,7 +163,6 @@ export default function FolderView({ folderKey, folderLabel, allFolders, onBack,
 
     setEvents(loadedEvents)
 
-    // 각 이벤트의 폴더 배정 로드 (picker에서 사용)
     if (loadedEvents.length > 0) {
       const ids = loadedEvents.map(e => e.id)
       const { data: efAll } = await supabase
@@ -147,7 +199,6 @@ export default function FolderView({ folderKey, folderLabel, allFolders, onBack,
         next.get(eventId)?.delete(folderId)
         return next
       })
-      // 현재 폴더에서 제거되면 목록에서도 제거
       if (folderId === folderKey) {
         setEvents(prev => prev.filter(e => e.id !== eventId))
       }
@@ -158,11 +209,55 @@ export default function FolderView({ folderKey, folderLabel, allFolders, onBack,
         next.get(eventId)?.add(folderId)
         return next
       })
-      // 미분류에서 폴더로 이동하면 미분류 목록에서 제거
       if (isUnclassified) {
         setEvents(prev => prev.filter(e => e.id !== eventId))
       }
     }
+  }
+
+  const handleAddTag = async (eventId: string) => {
+    const raw = tagInputValue[eventId] || ''
+    const tag = normalizeTag(raw)
+    if (!tag) { setTagInputOpen(p => ({ ...p, [eventId]: false })); return }
+
+    const event = events.find(e => e.id === eventId)
+    if (!event) return
+    const existing = event.tags ?? []
+    if (existing.includes(tag)) {
+      setTagInputOpen(p => ({ ...p, [eventId]: false }))
+      setTagInputValue(p => ({ ...p, [eventId]: '' }))
+      return
+    }
+    const newTags = [...existing, tag]
+    setEvents(prev => prev.map(e => e.id === eventId ? { ...e, tags: newTags } : e))
+    setTagInputOpen(p => ({ ...p, [eventId]: false }))
+    setTagInputValue(p => ({ ...p, [eventId]: '' }))
+    await supabase.from('events').update({ tags: newTags }).eq('id', eventId)
+  }
+
+  const handleRemoveTag = async (eventId: string, tag: string) => {
+    const event = events.find(e => e.id === eventId)
+    if (!event) return
+    const newTags = (event.tags ?? []).filter(t => t !== tag)
+    setEvents(prev => prev.map(e => e.id === eventId ? { ...e, tags: newTags } : e))
+    await supabase.from('events').update({ tags: newTags }).eq('id', eventId)
+  }
+
+  const handleExportZip = async () => {
+    setExporting(true)
+    const today = new Date().toISOString().slice(0, 10)
+    const zip = new JSZip()
+    const folder = zip.folder('Alice_knowledge_export')!
+    for (const event of events) {
+      folder.file(makeSafeFilename(event), generateMarkdown(event, today))
+    }
+    const blob = await zip.generateAsync({ type: 'blob' })
+    const a = document.createElement('a')
+    a.href = URL.createObjectURL(blob)
+    a.download = `${folderLabel}_export.zip`
+    a.click()
+    URL.revokeObjectURL(a.href)
+    setExporting(false)
   }
 
   const handleSaved = (updated: FullEvent) => {
@@ -215,6 +310,16 @@ export default function FolderView({ folderKey, folderLabel, allFolders, onBack,
         <span className="text-xs text-gray-400">{events.length}개</span>
 
         <div className="ml-auto flex items-center gap-2">
+          {events.length > 0 && (
+            <button
+              onClick={handleExportZip}
+              disabled={exporting}
+              className="text-xs text-purple-500 hover:text-purple-700 disabled:opacity-50"
+              title="Obsidian으로 내보내기"
+            >
+              {exporting ? '내보내는 중...' : '⟁ 내보내기'}
+            </button>
+          )}
           <select
             value={sortBy}
             onChange={e => setSortBy(e.target.value as 'newest' | 'oldest' | 'title')}
@@ -346,16 +451,51 @@ export default function FolderView({ folderKey, folderLabel, allFolders, onBack,
                 </p>
               </div>
 
-              {/* 태그 */}
-              {(e.tags ?? []).length > 0 && (
-                <div className="px-3 pb-1.5 flex flex-wrap gap-1">
-                  {(e.tags ?? []).map(tag => (
-                    <span key={tag} className="text-[10px] text-indigo-500 bg-indigo-50 px-1.5 py-0.5 rounded-full">
-                      #{tag}
-                    </span>
-                  ))}
-                </div>
-              )}
+              {/* 태그 + 빠른 태그 추가 */}
+              <div
+                className="px-3 pb-1.5 flex flex-wrap gap-1 items-center"
+                onClick={ev => ev.stopPropagation()}
+              >
+                {(e.tags ?? []).map(tag => (
+                  <span
+                    key={tag}
+                    className="group/tag flex items-center gap-0.5 text-[10px] text-indigo-500 bg-indigo-50 px-1.5 py-0.5 rounded-full"
+                  >
+                    #{tag}
+                    <button
+                      onClick={() => handleRemoveTag(e.id, tag)}
+                      className="opacity-0 group-hover/tag:opacity-100 text-indigo-300 hover:text-red-400 leading-none ml-0.5 transition-opacity"
+                    >
+                      ×
+                    </button>
+                  </span>
+                ))}
+
+                {tagInputOpen[e.id] ? (
+                  <input
+                    autoFocus
+                    value={tagInputValue[e.id] || ''}
+                    onChange={ev => setTagInputValue(p => ({ ...p, [e.id]: ev.target.value }))}
+                    onKeyDown={ev => {
+                      if (ev.key === 'Enter') handleAddTag(e.id)
+                      if (ev.key === 'Escape') {
+                        setTagInputOpen(p => ({ ...p, [e.id]: false }))
+                        setTagInputValue(p => ({ ...p, [e.id]: '' }))
+                      }
+                    }}
+                    onBlur={() => handleAddTag(e.id)}
+                    placeholder="태그..."
+                    className="text-[10px] w-16 px-1.5 py-0.5 rounded-full border border-indigo-300 bg-white text-indigo-600 focus:outline-none"
+                  />
+                ) : (
+                  <button
+                    onClick={() => setTagInputOpen(p => ({ ...p, [e.id]: true }))}
+                    className="text-[10px] text-gray-300 hover:text-indigo-400 opacity-0 group-hover:opacity-100 transition-opacity px-1"
+                  >
+                    + 태그
+                  </button>
+                )}
+              </div>
 
               {/* 하단 메타 + 액션 */}
               <div className="px-3 pb-2.5 flex items-center justify-between gap-1">
@@ -381,7 +521,7 @@ export default function FolderView({ folderKey, folderLabel, allFolders, onBack,
                 </div>
               </div>
 
-              {/* 즐겨찾기 고정 뱃지 (항상 표시) */}
+              {/* 즐겨찾기 고정 뱃지 */}
               {e.is_favorite && (
                 <span className="absolute top-2 right-2 text-xs">⭐</span>
               )}
