@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase'
 import { MODULE_COLORS } from '@/lib/constants'
 import { formatKSTDate, isURL } from '@/lib/utils'
 import EventModal, { type FullEvent } from '../shared/EventModal'
+import EventViewModal from '../shared/EventViewModal'
 import FolderPicker, { type Folder } from './FolderPicker'
 
 interface Event {
@@ -18,6 +19,10 @@ interface Event {
   duration_minutes: number | null
   amount: number | null
   is_favorite: boolean
+  og_image: string | null
+  og_title: string | null
+  tags: string[] | null
+  color: string | null
 }
 
 interface Props {
@@ -28,11 +33,25 @@ interface Props {
   onFolderRenamed?: () => void
 }
 
+const CONTENT_TYPE_FILTERS = [
+  { value: '', label: '전체' },
+  { value: 'link', label: '🔗 링크' },
+  { value: 'note', label: '📝 노트' },
+  { value: 'book', label: '📚 책' },
+  { value: 'pdf', label: '📄 PDF' },
+  { value: 'exercise', label: '🏃 운동' },
+  { value: 'meal', label: '🍽 식사' },
+  { value: 'expense', label: '💰 지출' },
+]
+
 export default function FolderView({ folderKey, folderLabel, allFolders, onBack, onFolderRenamed }: Props) {
   const [events, setEvents] = useState<Event[]>([])
   const [assignmentMap, setAssignmentMap] = useState<Map<string, Set<string>>>(new Map())
   const [loading, setLoading] = useState(true)
   const [editEvent, setEditEvent] = useState<Event | null>(null)
+  const [typeFilter, setTypeFilter] = useState('')
+  const [tagFilter, setTagFilter] = useState('')
+  const [sortBy, setSortBy] = useState<'newest' | 'oldest' | 'title'>('newest')
   const [renaming, setRenaming] = useState(false)
   const [folderName, setFolderName] = useState(
     allFolders.find(f => f.id === folderKey)?.name ?? folderLabel
@@ -53,7 +72,7 @@ export default function FolderView({ folderKey, folderLabel, allFolders, onBack,
     if (isFavorite) {
       const { data } = await supabase
         .from('events')
-        .select('id, created_at, raw_text, summary, modules, content_type, status, duration_minutes, amount, is_favorite')
+        .select('id, created_at, raw_text, summary, modules, content_type, status, duration_minutes, amount, is_favorite, og_image, og_title, tags, color')
         .eq('is_deleted', false)
         .eq('is_favorite', true)
         .order('created_at', { ascending: false })
@@ -63,7 +82,7 @@ export default function FolderView({ folderKey, folderLabel, allFolders, onBack,
       const [knowledgeRes, assignedRes] = await Promise.all([
         supabase
           .from('events')
-          .select('id, created_at, raw_text, summary, modules, content_type, status, duration_minutes, amount, is_favorite')
+          .select('id, created_at, raw_text, summary, modules, content_type, status, duration_minutes, amount, is_favorite, og_image, og_title, tags, color')
           .eq('is_deleted', false)
           .contains('modules', ['knowledge'])
           .order('created_at', { ascending: false }),
@@ -81,7 +100,7 @@ export default function FolderView({ folderKey, folderLabel, allFolders, onBack,
       if (eventIds.length > 0) {
         const { data } = await supabase
           .from('events')
-          .select('id, created_at, raw_text, summary, modules, content_type, status, duration_minutes, amount, is_favorite')
+          .select('id, created_at, raw_text, summary, modules, content_type, status, duration_minutes, amount, is_favorite, og_image, og_title, tags, color')
           .eq('is_deleted', false)
           .in('id', eventIds)
           .order('created_at', { ascending: false })
@@ -195,56 +214,154 @@ export default function FolderView({ folderKey, folderLabel, allFolders, onBack,
 
         <span className="text-xs text-gray-400">{events.length}개</span>
 
-        {isUserFolder && (
-          <button onClick={handleDeleteFolder} className="ml-auto text-xs text-red-400 hover:text-red-600">
-            폴더 삭제
-          </button>
-        )}
+        <div className="ml-auto flex items-center gap-2">
+          <select
+            value={sortBy}
+            onChange={e => setSortBy(e.target.value as 'newest' | 'oldest' | 'title')}
+            className="text-xs text-gray-400 bg-transparent focus:outline-none cursor-pointer hover:text-gray-600"
+          >
+            <option value="newest">최신순</option>
+            <option value="oldest">오래된순</option>
+            <option value="title">제목순</option>
+          </select>
+          {isUserFolder && (
+            <button onClick={handleDeleteFolder} className="text-xs text-red-400 hover:text-red-600">
+              폴더 삭제
+            </button>
+          )}
+        </div>
       </div>
+
+      {/* 타입 필터 바 */}
+      {!loading && events.length > 0 && (() => {
+        const allTags = Array.from(new Set(events.flatMap(e => e.tags ?? [])))
+        return (
+          <div className="mb-4 space-y-2">
+            <div className="flex gap-1.5 overflow-x-auto pb-1 scrollbar-hide">
+              {CONTENT_TYPE_FILTERS.map(f => (
+                <button
+                  key={f.value}
+                  onClick={() => setTypeFilter(f.value)}
+                  className={`shrink-0 text-xs px-3 py-1.5 rounded-full border transition-colors ${
+                    typeFilter === f.value
+                      ? 'bg-gray-900 text-white border-gray-900'
+                      : 'bg-white text-gray-500 border-gray-200 hover:border-gray-400'
+                  }`}
+                >
+                  {f.label}
+                </button>
+              ))}
+            </div>
+            {allTags.length > 0 && (
+              <div className="flex gap-1.5 overflow-x-auto pb-1 scrollbar-hide">
+                {allTags.map(tag => (
+                  <button
+                    key={tag}
+                    onClick={() => setTagFilter(prev => prev === tag ? '' : tag)}
+                    className={`shrink-0 text-xs px-2.5 py-1 rounded-full border transition-colors ${
+                      tagFilter === tag
+                        ? 'bg-indigo-600 text-white border-indigo-600'
+                        : 'bg-white text-gray-400 border-gray-200 hover:border-gray-400'
+                    }`}
+                  >
+                    #{tag}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        )
+      })()}
 
       {loading && <p className="text-sm text-gray-400">불러오는 중...</p>}
       {!loading && events.length === 0 && (
         <p className="text-sm text-gray-400 py-8 text-center">항목이 없습니다</p>
       )}
 
-      <div className="space-y-2">
-        {events.map(e => {
+      <div className="columns-2 gap-3 space-y-0">
+        {events
+          .filter(e => !typeFilter || e.content_type === typeFilter)
+          .filter(e => !tagFilter || (e.tags ?? []).includes(tagFilter))
+          .sort((a, b) => {
+            if (sortBy === 'oldest') return new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+            if (sortBy === 'title') return (a.summary || a.raw_text).localeCompare(b.summary || b.raw_text, 'ko')
+            return new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+          })
+          .map(e => {
           const text = e.summary || e.raw_text
           const url = isURL(e.raw_text) ? e.raw_text : null
+          const domain = url ? (() => { try { return new URL(url).hostname.replace('www.', '') } catch { return url } })() : null
           const assignedIds = assignmentMap.get(e.id) ?? new Set<string>()
           const userFolders = allFolders.filter(f => f.id !== folderKey)
+          const isLink = !!url
+          const accentColor: Record<string, string> = {
+            red: '#f87171', orange: '#fb923c', yellow: '#facc15',
+            green: '#4ade80', blue: '#60a5fa', purple: '#c084fc', pink: '#f472b6',
+          }
+          const borderColor = e.color ? accentColor[e.color] : undefined
 
           return (
-            <div key={e.id} className="bg-white rounded-xl p-3 shadow-sm border border-gray-100 group">
-              <div className="flex items-start gap-2">
-                {/* 즐겨찾기 토글 */}
-                <button
-                  onClick={() => toggleFavorite(e.id, e.is_favorite)}
-                  className="text-sm shrink-0 mt-0.5"
-                >
-                  {e.is_favorite ? '⭐' : '☆'}
-                </button>
-
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm text-gray-800 leading-snug">{text}</p>
-                  {url && url !== text && (
-                    <a href={url} target="_blank" rel="noopener noreferrer"
-                      className="text-xs text-blue-500 hover:underline truncate block mt-0.5">
-                      {url}
-                    </a>
-                  )}
-                  <div className="flex flex-wrap gap-1 mt-1.5 items-center">
-                    <span className="text-xs text-gray-400">{formatKSTDate(e.created_at)}</span>
-                    {(e.modules || []).map(m => (
-                      <span key={m} className={`text-xs px-1.5 py-0 rounded-full font-medium ${MODULE_COLORS[m] || 'bg-gray-100 text-gray-600'}`}>{m}</span>
-                    ))}
-                    {e.status && <span className="text-xs text-gray-400">{e.status}</span>}
-                  </div>
+            <div
+              key={e.id}
+              style={borderColor ? { borderLeftColor: borderColor, borderLeftWidth: 4 } : undefined}
+              className={`break-inside-avoid mb-3 rounded-2xl border shadow-sm group cursor-pointer relative transition-shadow hover:shadow-md ${
+                isLink
+                  ? 'bg-gradient-to-br from-blue-50 to-indigo-50 border-blue-100'
+                  : 'bg-white border-gray-100'
+              }`}
+              onClick={() => setEditEvent(e)}
+            >
+              {/* OG 썸네일 */}
+              {e.og_image && (
+                <div className="w-full h-32 overflow-hidden rounded-t-2xl">
+                  <img
+                    src={e.og_image}
+                    alt=""
+                    className="w-full h-full object-cover"
+                    onError={ev => { (ev.target as HTMLImageElement).style.display = 'none' }}
+                  />
                 </div>
+              )}
 
-                {/* 액션 버튼들 */}
-                <div className="flex items-center gap-1 shrink-0">
-                  {/* 폴더 배정 피커 (사용자 폴더가 있을 때만) */}
+              {/* 링크 타입 상단 도메인 + 새창 버튼 */}
+              {isLink && (
+                <div className="px-3 pt-2.5 pb-0 flex items-center justify-between">
+                  <span className="text-[10px] font-semibold text-blue-400 uppercase tracking-wide">{domain}</span>
+                  <a
+                    href={url!}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={ev => ev.stopPropagation()}
+                    className="text-[10px] text-blue-300 hover:text-blue-500 transition-colors opacity-0 group-hover:opacity-100"
+                  >
+                    ↗
+                  </a>
+                </div>
+              )}
+
+              {/* 본문 */}
+              <div className="px-3 pt-2 pb-2.5">
+                <p className={`text-sm leading-snug ${isLink ? 'text-gray-700' : 'text-gray-800'} line-clamp-6`}>
+                  {text}
+                </p>
+              </div>
+
+              {/* 태그 */}
+              {(e.tags ?? []).length > 0 && (
+                <div className="px-3 pb-1.5 flex flex-wrap gap-1">
+                  {(e.tags ?? []).map(tag => (
+                    <span key={tag} className="text-[10px] text-indigo-500 bg-indigo-50 px-1.5 py-0.5 rounded-full">
+                      #{tag}
+                    </span>
+                  ))}
+                </div>
+              )}
+
+              {/* 하단 메타 + 액션 */}
+              <div className="px-3 pb-2.5 flex items-center justify-between gap-1">
+                <span className="text-[10px] text-gray-400">{formatKSTDate(e.created_at)}</span>
+
+                <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity" onClick={ev => ev.stopPropagation()}>
                   {userFolders.length > 0 && (
                     <FolderPicker
                       eventId={e.id}
@@ -256,23 +373,28 @@ export default function FolderView({ folderKey, folderLabel, allFolders, onBack,
                     />
                   )}
                   <button
-                    onClick={() => setEditEvent(e)}
-                    className="text-gray-300 hover:text-gray-500 text-xs opacity-0 group-hover:opacity-100 transition-opacity"
+                    onClick={() => toggleFavorite(e.id, e.is_favorite)}
+                    className="text-sm leading-none"
                   >
-                    ✏️
+                    {e.is_favorite ? '⭐' : '☆'}
                   </button>
                 </div>
               </div>
+
+              {/* 즐겨찾기 고정 뱃지 (항상 표시) */}
+              {e.is_favorite && (
+                <span className="absolute top-2 right-2 text-xs">⭐</span>
+              )}
             </div>
           )
         })}
       </div>
 
       {editEvent && (
-        <EventModal
+        <EventViewModal
           event={editEvent as FullEvent}
           onClose={() => setEditEvent(null)}
-          onSaved={handleSaved}
+          onSaved={(saved) => { handleSaved(saved); setEditEvent(null) }}
           onDeleted={handleDeleted}
         />
       )}

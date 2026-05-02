@@ -3,7 +3,6 @@
 import type { View } from './Sidebar'
 
 const NAV_ITEMS: { id: View; label: string; icon: string }[] = [
-  { id: 'home', label: '홈', icon: '🏠' },
   { id: 'jigaebu', label: '시계부', icon: '🕐' },
   { id: 'jisik', label: '지식', icon: '📚' },
   { id: 'geongang', label: '건강', icon: '💪' },

@@ -24,6 +24,12 @@ export default function Home() {
     <div className="h-screen flex flex-col bg-gray-50">
       {/* 상단 검색바 */}
       <header className="h-12 bg-white border-b border-gray-100 flex items-center px-4 gap-3 shrink-0 z-20">
+        <button
+          onClick={() => setView('home')}
+          className="md:hidden text-sm font-bold text-gray-900 hover:text-gray-600 transition-colors shrink-0"
+        >
+          Alice
+        </button>
         <SearchBar />
         <button
           onClick={() => setAddModal(true)}
@@ -53,6 +59,7 @@ export default function Home() {
       {addModal && (
         <EventModal
           event={null}
+          template={view === 'home' ? 'default' : view as 'jisik' | 'geongang' | 'jigaebu' | 'sns'}
           onClose={() => setAddModal(false)}
           onSaved={handleSaved}
         />

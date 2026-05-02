@@ -17,6 +17,10 @@ interface Event {
   amount: number | null
   is_manually_edited: boolean
   is_favorite: boolean
+  og_image: string | null
+  og_title: string | null
+  tags: string[] | null
+  color: string | null
 }
 
 export default function SnsView() {
@@ -28,7 +32,7 @@ export default function SnsView() {
   useEffect(() => {
     supabase
       .from('events')
-      .select('id, created_at, raw_text, summary, modules, content_type, status, duration_minutes, amount, is_manually_edited, is_favorite')
+      .select('id, created_at, raw_text, summary, modules, content_type, status, duration_minutes, amount, is_manually_edited, is_favorite, og_image, og_title, tags, color')
       .eq('is_deleted', false)
       .contains('modules', ['sns'])
       .order('created_at', { ascending: false })

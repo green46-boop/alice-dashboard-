@@ -3,7 +3,6 @@
 type View = 'home' | 'jigaebu' | 'jisik' | 'geongang' | 'sns'
 
 const NAV_ITEMS: { id: View; label: string; icon: string }[] = [
-  { id: 'home', label: '홈', icon: '🏠' },
   { id: 'jigaebu', label: '시계부', icon: '🕐' },
   { id: 'jisik', label: '지식', icon: '📚' },
   { id: 'geongang', label: '건강', icon: '💪' },
@@ -19,7 +18,12 @@ export default function Sidebar({ currentView, onNavigate }: Props) {
   return (
     <aside className="hidden md:flex w-52 shrink-0 bg-white border-r border-gray-100 flex-col">
       <div className="px-5 py-5">
-        <h1 className="text-lg font-bold text-gray-900">Alice</h1>
+        <button
+          onClick={() => onNavigate('home')}
+          className="text-lg font-bold text-gray-900 hover:text-gray-600 transition-colors text-left"
+        >
+          Alice
+        </button>
       </div>
       <nav className="flex-1 px-2">
         {NAV_ITEMS.map(item => (
