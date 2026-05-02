@@ -27,7 +27,6 @@ interface HealthEvent {
   sleep_hours: number | null
   condition_score: number | null
   exercise_done: boolean | null
-  duration_minutes: number | null
   exercise_intensity: number | null
   exercise_type: string | null
   steps: number | null
