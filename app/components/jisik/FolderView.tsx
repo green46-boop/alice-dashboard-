@@ -69,7 +69,7 @@ function generateMarkdown(event: Event, today: string): string {
     ? `---\ntags: [${tags.join(', ')}]\n---`
     : ''
 
-  const parts: string[] = fm ? [fm, '', `# ${title}`, ''] : [`# ${title}`, '']
+  const parts: string[] = fm ? [fm, ''] : []
 
   if (url) {
     let domain = url
@@ -77,9 +77,11 @@ function generateMarkdown(event: Event, today: string): string {
     parts.push('> [!info] 출처', `> [${domain}](${url})`, '')
   }
 
-  if (body) {
-    const mdBody = body.replace(/\n/g, '\n\n')
-    parts.push('## 내용', '', mdBody, '')
+  const rawBody = !event.raw_text.startsWith('http') ? event.raw_text : null
+  const bodyClean = rawBody?.replace(/https?:\/\/\S+/g, '').trim() || null
+  if (bodyClean) {
+    const mdBody = bodyClean.replace(/\n/g, '\n\n')
+    parts.push(mdBody, '')
   }
 
   if (tags.length > 0) {

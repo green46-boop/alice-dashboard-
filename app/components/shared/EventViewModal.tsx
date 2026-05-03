@@ -19,22 +19,25 @@ const ACCENT: Record<string, string> = {
 }
 
 function safeTitle(event: FullEvent): string {
-  return event.summary || event.og_title || event.raw_text.slice(0, 50)
+  const raw = event.summary || event.og_title || event.raw_text.slice(0, 50)
+  return raw.replace(/https?:\/\/\S+/g, '').trim() || event.id.slice(0, 8)
 }
 
 function generateMarkdown(event: FullEvent): string {
   const url = isURL(event.raw_text) ? event.raw_text : null
-  const title = safeTitle(event)
-  const body = (url && event.raw_text === url) ? null
-    : (!event.raw_text.startsWith('http') ? event.raw_text : null)
   const tags = event.tags ?? []
   const today = new Date().toISOString().slice(0, 10)
+
+  // body: URL 아닌 텍스트, URL만 있거나 URL과 동일하면 null
+  const rawBody = !event.raw_text.startsWith('http') ? event.raw_text : null
+  const bodyClean = rawBody?.replace(/https?:\/\/\S+/g, '').trim() || null
+  const body = bodyClean || null
 
   const fm = tags.length > 0
     ? `---\ntags: [${tags.join(', ')}]\n---`
     : ''
 
-  const parts: string[] = fm ? [fm, '', `# ${title}`, ''] : [`# ${title}`, '']
+  const parts: string[] = fm ? [fm, ''] : []
 
   if (url) {
     let domain = url
@@ -44,14 +47,13 @@ function generateMarkdown(event: FullEvent): string {
 
   if (body) {
     const mdBody = body.replace(/\n/g, '\n\n')
-    parts.push('## 내용', '', mdBody, '')
+    parts.push(mdBody, '')
   }
 
   if (tags.length > 0) {
     parts.push('---', '', tags.map(t => `#${t}`).join(' '), '')
   }
 
-  // 메타데이터는 하단에 접힌 callout으로
   const meta = [
     `> alice_id: ${event.id}`,
     `> source: alice`,
