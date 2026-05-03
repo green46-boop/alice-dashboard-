@@ -23,7 +23,7 @@ function safeTitle(event: FullEvent): string {
   return raw.replace(/https?:\/\/\S+/g, '').trim() || event.id.slice(0, 8)
 }
 
-function generateMarkdown(event: FullEvent): string {
+function generateMarkdown(event: FullEvent, overrideArticleBody?: string | null): string {
   const urlMatch = event.raw_text.match(/https?:\/\/\S+/)
   const url = urlMatch ? urlMatch[0] : null
   const tags = event.tags ?? []
@@ -44,8 +44,8 @@ function generateMarkdown(event: FullEvent): string {
     parts.push('> [!info] 출처', `> [${domain}](${url})`, '')
   }
 
-  // article_body 우선, 없으면 사용자 메모(body) 사용
-  const contentBody = event.article_body || body
+  // article_body 우선 (로컬 상태 반영), 없으면 사용자 메모(body) 사용
+  const contentBody = (overrideArticleBody !== undefined ? overrideArticleBody : event.article_body) || body
   if (contentBody) {
     const mdBody = contentBody.replace(/\n/g, '\n\n')
     parts.push(mdBody, '')
@@ -68,7 +68,7 @@ function generateMarkdown(event: FullEvent): string {
   return parts.join('\n')
 }
 
-function sendToObsidian(event: FullEvent) {
+function sendToObsidian(event: FullEvent, articleBody?: string | null) {
   let vaultName = localStorage.getItem('obsidian_vault_name')
   if (!vaultName) {
     vaultName = prompt('Obsidian Vault 이름을 입력하세요:')
@@ -79,7 +79,7 @@ function sendToObsidian(event: FullEvent) {
   const title = safeTitle(event)
   const safe = title.replace(/[/\\:*?"<>|#%]/g, '').trim().slice(0, 60)
   const filePath = `Alice/knowledge/${safe}`
-  const content = generateMarkdown(event)
+  const content = generateMarkdown(event, articleBody)
 
   const uri = `obsidian://new?vault=${encodeURIComponent(vaultName)}&file=${encodeURIComponent(filePath)}&content=${encodeURIComponent(content)}&paneType=tab`
   window.open(uri, '_blank')
@@ -90,6 +90,8 @@ export default function EventViewModal({ event, onClose, onSaved, onDeleted }: P
   const [isFavorite, setIsFavorite] = useState(event.is_favorite)
   const [copied, setCopied] = useState(false)
   const [bodyExpanded, setBodyExpanded] = useState(false)
+  const [articleBody, setArticleBody] = useState(event.article_body)
+  const [refetching, setRefetching] = useState(false)
   const supabase = createClient()
 
   const urlMatch = event.raw_text.match(/https?:\/\/\S+/)
@@ -111,6 +113,25 @@ export default function EventViewModal({ event, onClose, onSaved, onDeleted }: P
     await navigator.clipboard.writeText(url)
     setCopied(true)
     setTimeout(() => setCopied(false), 1500)
+  }
+
+  const refetchArticle = async () => {
+    if (!url || refetching) return
+    setRefetching(true)
+    try {
+      const res = await fetch('/api/article', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ event_id: event.id, url }),
+      })
+      const data = await res.json()
+      if (data.ok) {
+        const { data: row } = await supabase.from('events').select('article_body').eq('id', event.id).single()
+        if (row?.article_body) setArticleBody(row.article_body)
+      }
+    } finally {
+      setRefetching(false)
+    }
   }
 
   // 표시용 단축 URL
@@ -164,7 +185,7 @@ export default function EventViewModal({ event, onClose, onSaved, onDeleted }: P
               </a>
             )}
             <button
-              onClick={() => sendToObsidian(event)}
+              onClick={() => sendToObsidian(event, articleBody)}
               className="text-xs px-3 py-1.5 bg-purple-50 text-purple-600 rounded-full font-medium hover:bg-purple-100 transition-colors"
               title="Obsidian으로 보내기"
             >
@@ -221,17 +242,39 @@ export default function EventViewModal({ event, onClose, onSaved, onDeleted }: P
             )}
 
             {/* 리더 뷰 — 기사 본문 */}
-            {event.article_body && (
+            {url && (
               <div className="border-t border-gray-100 pt-3">
-                <div className={`text-sm text-gray-700 leading-relaxed whitespace-pre-wrap overflow-hidden transition-all ${bodyExpanded ? '' : 'max-h-48'}`}>
-                  {event.article_body}
-                </div>
-                {event.article_body.length > 300 && (
+                {articleBody ? (
+                  <>
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-[10px] text-gray-400 font-medium uppercase tracking-wide">본문</span>
+                      <button
+                        onClick={refetchArticle}
+                        disabled={refetching}
+                        className="text-[10px] text-gray-400 hover:text-blue-500 transition-colors disabled:opacity-50"
+                      >
+                        {refetching ? '가져오는 중…' : '↺ 새로고침'}
+                      </button>
+                    </div>
+                    <div className={`text-sm text-gray-700 leading-relaxed whitespace-pre-wrap overflow-hidden transition-all ${bodyExpanded ? '' : 'max-h-48'}`}>
+                      {articleBody}
+                    </div>
+                    {articleBody.length > 300 && (
+                      <button
+                        onClick={() => setBodyExpanded(v => !v)}
+                        className="mt-2 text-xs text-blue-500 hover:text-blue-600 font-medium"
+                      >
+                        {bodyExpanded ? '접기 ↑' : '전체 보기 ↓'}
+                      </button>
+                    )}
+                  </>
+                ) : (
                   <button
-                    onClick={() => setBodyExpanded(v => !v)}
-                    className="mt-2 text-xs text-blue-500 hover:text-blue-600 font-medium"
+                    onClick={refetchArticle}
+                    disabled={refetching}
+                    className="text-xs text-blue-500 hover:text-blue-600 font-medium disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    {bodyExpanded ? '접기 ↑' : '전체 보기 ↓'}
+                    {refetching ? '본문 가져오는 중…' : '📄 본문 가져오기'}
                   </button>
                 )}
               </div>
