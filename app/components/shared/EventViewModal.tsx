@@ -24,14 +24,13 @@ function safeTitle(event: FullEvent): string {
 }
 
 function generateMarkdown(event: FullEvent): string {
-  const url = isURL(event.raw_text) ? event.raw_text : null
+  const urlMatch = event.raw_text.match(/https?:\/\/\S+/)
+  const url = urlMatch ? urlMatch[0] : null
   const tags = event.tags ?? []
   const today = new Date().toISOString().slice(0, 10)
 
-  // body: URL 아닌 텍스트, URL만 있거나 URL과 동일하면 null
-  const rawBody = !event.raw_text.startsWith('http') ? event.raw_text : null
-  const bodyClean = rawBody?.replace(/https?:\/\/\S+/g, '').trim() || null
-  const body = bodyClean || null
+  const bodyText = url ? event.raw_text.replace(url, '').trim() : event.raw_text.trim()
+  const body = bodyText || null
 
   const fm = tags.length > 0
     ? `---\ntags: [${tags.join(', ')}]\n---`
@@ -90,10 +89,12 @@ export default function EventViewModal({ event, onClose, onSaved, onDeleted }: P
   const [copied, setCopied] = useState(false)
   const supabase = createClient()
 
-  const url = isURL(event.raw_text) ? event.raw_text : null
+  const urlMatch = event.raw_text.match(/https?:\/\/\S+/)
+  const url = urlMatch ? urlMatch[0] : null
   const domain = url ? (() => { try { return new URL(url).hostname.replace('www.', '') } catch { return url } })() : null
   const title = event.summary || event.og_title || null
-  const body = (!event.raw_text.startsWith('http') && event.raw_text !== title) ? event.raw_text : null
+  const rawBody = url ? event.raw_text.replace(url, '').trim() : event.raw_text.trim()
+  const body = (rawBody && rawBody !== title) ? rawBody : null
   const borderColor = event.color ? ACCENT[event.color] : undefined
 
   const toggleFavorite = async () => {

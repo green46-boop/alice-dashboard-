@@ -59,10 +59,10 @@ function makeSafeFilename(event: Event): string {
 }
 
 function generateMarkdown(event: Event, today: string): string {
-  const url = isURL(event.raw_text) ? event.raw_text : null
-  const title = event.summary || event.og_title || event.raw_text.slice(0, 50)
-  const body = (url && event.raw_text === url) ? null
-    : (!event.raw_text.startsWith('http') ? event.raw_text : null)
+  const urlMatch = event.raw_text.match(/https?:\/\/\S+/)
+  const url = urlMatch ? urlMatch[0] : null
+  const bodyText = url ? event.raw_text.replace(url, '').trim() : event.raw_text.trim()
+  const body = bodyText || null
   const tags = event.tags ?? []
 
   const fm = tags.length > 0
@@ -77,10 +77,8 @@ function generateMarkdown(event: Event, today: string): string {
     parts.push('> [!info] 출처', `> [${domain}](${url})`, '')
   }
 
-  const rawBody = !event.raw_text.startsWith('http') ? event.raw_text : null
-  const bodyClean = rawBody?.replace(/https?:\/\/\S+/g, '').trim() || null
-  if (bodyClean) {
-    const mdBody = bodyClean.replace(/\n/g, '\n\n')
+  if (body) {
+    const mdBody = body.replace(/\n/g, '\n\n')
     parts.push(mdBody, '')
   }
 
