@@ -47,10 +47,21 @@ export async function GET(req: NextRequest) {
       return null
     }
 
+    const decodeEntities = (str: string | null) => {
+      if (!str) return null
+      return str
+        .replace(/&quot;/g, '"')
+        .replace(/&amp;/g, '&')
+        .replace(/&lt;/g, '<')
+        .replace(/&gt;/g, '>')
+        .replace(/&apos;/g, "'")
+        .replace(/&#(\d+);/g, (_, n) => String.fromCharCode(Number(n)))
+    }
+
     return NextResponse.json({
-      title: getTitle(),
+      title: decodeEntities(getTitle()),
       image: resolveImage(getMeta('image')),
-      description: getMeta('description'),
+      description: decodeEntities(getMeta('description')),
     })
   } catch {
     return NextResponse.json({ error: 'fetch failed' }, { status: 500 })

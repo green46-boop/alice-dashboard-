@@ -1,7 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
-import { Readability } from '@mozilla/readability'
-import { JSDOM } from 'jsdom'
 
 const SNS_DOMAINS = ['instagram.com', 'youtube.com', 'youtu.be', 'tiktok.com',
   'twitter.com', 'x.com', 'threads.net', 'facebook.com']
@@ -29,38 +27,32 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: false, reason: 'invalid url' }, { status: 400 })
   }
 
-  // 페이지 fetch
-  let html: string
-  try {
-    const res = await fetch(url, {
-      signal: AbortSignal.timeout(10000),
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-        'Accept-Language': 'ko-KR,ko;q=0.9,en-US;q=0.8',
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-      },
-    })
-    if (!res.ok) return NextResponse.json({ ok: false, reason: `fetch ${res.status}` })
-    html = await res.text()
-  } catch {
-    return NextResponse.json({ ok: false, reason: 'fetch failed' })
-  }
-
-  // Readability로 본문 추출
+  // Jina AI Reader로 본문 추출 (headless Chrome 기반, 한국 사이트 지원)
   let articleText: string | null = null
   try {
-    const dom = new JSDOM(html, { url })
-    const reader = new Readability(dom.window.document)
-    const article = reader.parse()
-    if (article?.textContent) {
-      // 공백 정리
-      articleText = article.textContent
+    const jinaUrl = `https://r.jina.ai/${url}`
+    const res = await fetch(jinaUrl, {
+      signal: AbortSignal.timeout(30000),
+      headers: {
+        'Accept': 'text/plain',
+        'X-Return-Format': 'markdown',
+      },
+    })
+    if (res.ok) {
+      const text = await res.text()
+      // Jina 응답 앞부분 메타 헤더 제거 (Title:, URL:, --- 등)
+      const cleaned = text
+        .replace(/^Title:.*$/m, '')
+        .replace(/^URL:.*$/m, '')
+        .replace(/^---+$/m, '')
         .replace(/\n{3,}/g, '\n\n')
         .trim()
-        .slice(0, 20000) // 최대 20,000자
+      if (cleaned.length > 100) {
+        articleText = cleaned.slice(0, 20000)
+      }
     }
   } catch {
-    return NextResponse.json({ ok: false, reason: 'parse failed' })
+    return NextResponse.json({ ok: false, reason: 'fetch failed' })
   }
 
   if (!articleText) {
