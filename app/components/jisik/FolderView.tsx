@@ -86,7 +86,8 @@ function generateMarkdown(event: Event, today: string): string {
   }
 
   if (body) {
-    parts.push('## 내용', '', body, '')
+    const mdBody = body.replace(/\n/g, '\n\n')
+    parts.push('## 내용', '', mdBody, '')
   }
 
   if (tags.length > 0) {
