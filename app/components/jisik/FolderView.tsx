@@ -52,8 +52,8 @@ function normalizeTag(raw: string): string {
 function makeSafeFilename(event: Event): string {
   const title = event.summary || event.og_title || event.id
   const safe = title
-    .replace(/[/\\:*?"<>|#%]/g, '_')
-    .replace(/\s+/g, '_')
+    .replace(/[/\\:*?"<>|#%]/g, '')
+    .trim()
     .slice(0, 60)
   return `${safe}.md`
 }

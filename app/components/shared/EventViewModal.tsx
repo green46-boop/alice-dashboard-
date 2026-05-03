@@ -71,7 +71,7 @@ function sendToObsidian(event: FullEvent) {
   }
 
   const title = safeTitle(event)
-  const safe = title.replace(/[/\\:*?"<>|#%]/g, '_').replace(/\s+/g, '_').slice(0, 60)
+  const safe = title.replace(/[/\\:*?"<>|#%]/g, '').trim().slice(0, 60)
   const filePath = `Alice/knowledge/${safe}`
   const content = generateMarkdown(event)
 
