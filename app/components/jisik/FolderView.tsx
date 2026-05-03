@@ -55,7 +55,7 @@ function makeSafeFilename(event: Event): string {
     .replace(/[/\\:*?"<>|#%]/g, '_')
     .replace(/\s+/g, '_')
     .slice(0, 60)
-  return `${event.id.slice(0, 8)}_${safe}.md`
+  return `${safe}.md`
 }
 
 function generateMarkdown(event: Event, today: string): string {

@@ -71,7 +71,7 @@ function sendToObsidian(event: FullEvent) {
 
   const title = safeTitle(event)
   const safe = title.replace(/[/\\:*?"<>|#%]/g, '_').replace(/\s+/g, '_').slice(0, 60)
-  const filePath = `Alice/knowledge/${event.id.slice(0, 8)}_${safe}`
+  const filePath = `Alice/knowledge/${safe}`
   const content = generateMarkdown(event)
 
   const uri = `obsidian://new?vault=${encodeURIComponent(vaultName)}&file=${encodeURIComponent(filePath)}&content=${encodeURIComponent(content)}&paneType=tab`
