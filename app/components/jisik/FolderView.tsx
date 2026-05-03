@@ -65,19 +65,11 @@ function generateMarkdown(event: Event, today: string): string {
     : (!event.raw_text.startsWith('http') ? event.raw_text : null)
   const tags = event.tags ?? []
 
-  const fm = [
-    '---',
-    `alice_id: "${event.id}"`,
-    `source: alice`,
-    `content_type: ${event.content_type || 'note'}`,
-    `created_at: ${event.created_at.slice(0, 10)}`,
-    `updated_at: ${today}`,
-    url ? `url: "${url}"` : null,
-    tags.length > 0 ? `tags: [${tags.join(', ')}]` : null,
-    '---',
-  ].filter(Boolean).join('\n')
+  const fm = tags.length > 0
+    ? `---\ntags: [${tags.join(', ')}]\n---`
+    : ''
 
-  const parts: string[] = [fm, '', `# ${title}`, '']
+  const parts: string[] = fm ? [fm, '', `# ${title}`, ''] : [`# ${title}`, '']
 
   if (url) {
     let domain = url
@@ -91,8 +83,18 @@ function generateMarkdown(event: Event, today: string): string {
   }
 
   if (tags.length > 0) {
-    parts.push('---', '', tags.map(t => `#${t}`).join(' '))
+    parts.push('---', '', tags.map(t => `#${t}`).join(' '), '')
   }
+
+  const meta = [
+    `> alice_id: ${event.id}`,
+    `> source: alice`,
+    `> content_type: ${event.content_type || 'note'}`,
+    `> created_at: ${event.created_at.slice(0, 10)}`,
+    `> updated_at: ${today}`,
+    url ? `> url: ${url}` : null,
+  ].filter(Boolean).join('\n')
+  parts.push('> [!note]- Alice 메타데이터', meta)
 
   return parts.join('\n')
 }
