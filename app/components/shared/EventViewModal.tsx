@@ -44,8 +44,10 @@ function generateMarkdown(event: FullEvent): string {
     parts.push('> [!info] 출처', `> [${domain}](${url})`, '')
   }
 
-  if (body) {
-    const mdBody = body.replace(/\n/g, '\n\n')
+  // article_body 우선, 없으면 사용자 메모(body) 사용
+  const contentBody = event.article_body || body
+  if (contentBody) {
+    const mdBody = contentBody.replace(/\n/g, '\n\n')
     parts.push(mdBody, '')
   }
 
@@ -87,6 +89,7 @@ export default function EventViewModal({ event, onClose, onSaved, onDeleted }: P
   const [editing, setEditing] = useState(false)
   const [isFavorite, setIsFavorite] = useState(event.is_favorite)
   const [copied, setCopied] = useState(false)
+  const [bodyExpanded, setBodyExpanded] = useState(false)
   const supabase = createClient()
 
   const urlMatch = event.raw_text.match(/https?:\/\/\S+/)
@@ -207,7 +210,7 @@ export default function EventViewModal({ event, onClose, onSaved, onDeleted }: P
               <h2 className="text-lg font-bold text-gray-900 leading-snug">{title}</h2>
             )}
 
-            {/* 본문 */}
+            {/* 사용자 메모 (URL 외 텍스트) */}
             {body && (
               <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">{body}</p>
             )}
@@ -215,6 +218,23 @@ export default function EventViewModal({ event, onClose, onSaved, onDeleted }: P
             {/* URL만 있을 때 */}
             {!title && !body && url && (
               <p className="text-sm text-gray-400 break-all">{url}</p>
+            )}
+
+            {/* 리더 뷰 — 기사 본문 */}
+            {event.article_body && (
+              <div className="border-t border-gray-100 pt-3">
+                <div className={`text-sm text-gray-700 leading-relaxed whitespace-pre-wrap overflow-hidden transition-all ${bodyExpanded ? '' : 'max-h-48'}`}>
+                  {event.article_body}
+                </div>
+                {event.article_body.length > 300 && (
+                  <button
+                    onClick={() => setBodyExpanded(v => !v)}
+                    className="mt-2 text-xs text-blue-500 hover:text-blue-600 font-medium"
+                  >
+                    {bodyExpanded ? '접기 ↑' : '전체 보기 ↓'}
+                  </button>
+                )}
+              </div>
             )}
 
             {/* 구분선 */}

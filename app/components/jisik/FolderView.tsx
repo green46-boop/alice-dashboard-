@@ -24,6 +24,7 @@ interface Event {
   og_title: string | null
   tags: string[] | null
   color: string | null
+  article_body: string | null
 }
 
 interface Props {
@@ -77,8 +78,10 @@ function generateMarkdown(event: Event, today: string): string {
     parts.push('> [!info] 출처', `> [${domain}](${url})`, '')
   }
 
-  if (body) {
-    const mdBody = body.replace(/\n/g, '\n\n')
+  // article_body 우선, 없으면 사용자 메모(body) 사용
+  const contentBody = event.article_body || body
+  if (contentBody) {
+    const mdBody = contentBody.replace(/\n/g, '\n\n')
     parts.push(mdBody, '')
   }
 
@@ -130,7 +133,7 @@ export default function FolderView({ folderKey, folderLabel, allFolders, onBack,
     if (isFavorite) {
       const { data } = await supabase
         .from('events')
-        .select('id, created_at, raw_text, summary, modules, content_type, status, duration_minutes, amount, is_favorite, og_image, og_title, tags, color')
+        .select('id, created_at, raw_text, summary, modules, content_type, status, duration_minutes, amount, is_favorite, og_image, og_title, tags, color, article_body')
         .eq('is_deleted', false)
         .eq('is_favorite', true)
         .order('created_at', { ascending: false })
@@ -139,7 +142,7 @@ export default function FolderView({ folderKey, folderLabel, allFolders, onBack,
       const [knowledgeRes, assignedRes] = await Promise.all([
         supabase
           .from('events')
-          .select('id, created_at, raw_text, summary, modules, content_type, status, duration_minutes, amount, is_favorite, og_image, og_title, tags, color')
+          .select('id, created_at, raw_text, summary, modules, content_type, status, duration_minutes, amount, is_favorite, og_image, og_title, tags, color, article_body')
           .eq('is_deleted', false)
           .contains('modules', ['knowledge'])
           .order('created_at', { ascending: false }),
@@ -156,7 +159,7 @@ export default function FolderView({ folderKey, folderLabel, allFolders, onBack,
       if (eventIds.length > 0) {
         const { data } = await supabase
           .from('events')
-          .select('id, created_at, raw_text, summary, modules, content_type, status, duration_minutes, amount, is_favorite, og_image, og_title, tags, color')
+          .select('id, created_at, raw_text, summary, modules, content_type, status, duration_minutes, amount, is_favorite, og_image, og_title, tags, color, article_body')
           .eq('is_deleted', false)
           .in('id', eventIds)
           .order('created_at', { ascending: false })

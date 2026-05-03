@@ -24,6 +24,7 @@ interface Event {
   og_title: string | null
   tags: string[] | null
   color: string | null
+  article_body: string | null
   last_reminded_at: string | null
 }
 
@@ -77,7 +78,7 @@ export default function JisikView() {
     const [reminderRes, folderRes, assignedRes, allKnowledgeRes, favoriteRes] = await Promise.all([
       supabase
         .from('events')
-        .select('id, created_at, raw_text, summary, modules, content_type, status, duration_minutes, amount, is_favorite, og_image, og_title, tags, color, last_reminded_at')
+        .select('id, created_at, raw_text, summary, modules, content_type, status, duration_minutes, amount, is_favorite, og_image, og_title, tags, color, article_body, last_reminded_at')
         .eq('is_deleted', false)
         .contains('modules', ['knowledge'])
         .order('last_reminded_at', { ascending: true, nullsFirst: true })

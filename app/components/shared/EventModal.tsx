@@ -18,6 +18,7 @@ export interface FullEvent {
   og_title: string | null
   tags: string[] | null
   color: string | null
+  article_body: string | null
 }
 
 interface Folder {
@@ -289,6 +290,15 @@ export default function EventModal({ event, template = 'default', onClose, onSav
           await supabase.from('event_folders').delete().eq('event_id', eventId).in('folder_id', toRemove)
       }
       onSaved(savedEvent)
+
+      // 새 링크 저장 시 백그라운드에서 본문 추출 (fire-and-forget)
+      if (isNew && urlDetected) {
+        fetch('/api/article', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ event_id: savedEvent.id, url: rawTextVal }),
+        }).catch(() => { /* 실패해도 무시 */ })
+      }
     }
 
     setSaving(false)
